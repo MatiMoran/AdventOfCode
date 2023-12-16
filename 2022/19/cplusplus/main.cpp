@@ -17,6 +17,12 @@ enum ResourceType
     RESOURCE_TYPE_END,
 };
 
+enum StateResourceType
+{
+    STATE_RESOURCE_RESOURCE = 0,
+    STATE_RESOURCE_ROBOTS,
+};
+
 class Blueprint {
 
     public:
@@ -37,93 +43,78 @@ class State {
     public:
         uint8_t time;
 
-        uint8_t ore;
-        uint8_t clay;
-        uint8_t obsidian;
-        uint8_t gem;
-
-        uint8_t ore_robots;
-        uint8_t clay_robots;
-        uint8_t obsidian_robots;
-        uint8_t gem_robots;
+        uint8_t resource[RESOURCE_TYPE_END][2];
 
     public:
         State() {
             time = 0;
 
-            ore = 0;
-            clay = 0;
-            obsidian = 0;
-            gem = 0;
+            for (uint8_t k = RESOURCE_TYPE_START + 1; k < RESOURCE_TYPE_END; k++) {
+                resource[k][STATE_RESOURCE_RESOURCE] = 0;
+                resource[k][STATE_RESOURCE_ROBOTS] = 0;
+            }
 
-            ore_robots = 1;
-            clay_robots = 0;
-            obsidian_robots = 0;
-            gem_robots = 0;
+            resource[RESOURCE_TYPE_ORE][STATE_RESOURCE_ROBOTS] = 1;
         }
 
         State(State *state) {
             
             time = state->time;
             
-            ore = state->ore;
-            clay = state->clay; 
-            obsidian = state->obsidian; 
-            gem = state->gem; 
-
-            ore_robots = state->ore_robots; 
-            clay_robots = state->clay_robots; 
-            obsidian_robots = state->obsidian_robots; 
-            gem_robots = state->gem_robots; 
+            for (uint8_t k = RESOURCE_TYPE_START + 1; k < RESOURCE_TYPE_END; k++) {
+                resource[k][STATE_RESOURCE_RESOURCE] = state->resource[k][STATE_RESOURCE_RESOURCE];
+                resource[k][STATE_RESOURCE_ROBOTS] = state->resource[k][STATE_RESOURCE_ROBOTS];
+            }
         }
 
         State get_child_state() {
             State child_state(this);
 
             child_state.time = this->time - 1;
-            child_state.ore += this->ore_robots;
-            child_state.clay += this->clay_robots;
-            child_state.obsidian += this->obsidian_robots;
-            child_state.gem += this->gem_robots;
+
+            for (uint8_t k = RESOURCE_TYPE_START + 1; k < RESOURCE_TYPE_END; k++) {
+                child_state.resource[k][STATE_RESOURCE_RESOURCE] += this->resource[k][STATE_RESOURCE_ROBOTS];
+            }
 
             return child_state;
         }
 
 };
 
+// bool cant_be_builded_before(uint8_t *robot_cost, State state) {
+//     
+//     for (uint8_t k = RESOURCE_TYPE_START + 1; k < RESOURCE_TYPE_END; k++) {
+//         if (state.resource[k][STATE_RESOURCE_RESOURCE] - state.resource[k][STATE_RESOURCE_ROBOTS] < robot_cost[k]) {
+//             return false;
+//         }
+//     }
+// 
+//     return true;
+// }
+
 bool can_build_robot(Blueprint blueprint, State state, ResourceType resource) {
 
     uint8_t *robot_cost = blueprint.robot_cost[resource];
 
-    return robot_cost[RESOURCE_TYPE_ORE] <= state.ore &&
-        robot_cost[RESOURCE_TYPE_CLAY] <= state.clay && 
-        robot_cost[RESOURCE_TYPE_OBSIDIAN] <= state.obsidian && 
-        robot_cost[RESOURCE_TYPE_GEM] <= state.gem;
+    for (uint8_t k = RESOURCE_TYPE_START + 1; k < RESOURCE_TYPE_END; k++) {
+        if (robot_cost[k] > state.resource[k][STATE_RESOURCE_RESOURCE]) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void build_robot(Blueprint blueprint, State *state, ResourceType resource) {
 
     uint8_t *robot_cost = blueprint.robot_cost[resource];
 
-    state->ore -= robot_cost[RESOURCE_TYPE_ORE];
-    state->clay -= robot_cost[RESOURCE_TYPE_CLAY];
-    state->obsidian -= robot_cost[RESOURCE_TYPE_OBSIDIAN];
-    state->gem -= robot_cost[RESOURCE_TYPE_GEM];
 
-    switch (resource) {
-        case RESOURCE_TYPE_ORE:
-            state->ore_robots++;
-            break;
-        case RESOURCE_TYPE_CLAY:
-            state->clay_robots++;
-            break;
-        case RESOURCE_TYPE_OBSIDIAN:
-            state->obsidian_robots++;
-            break;
-        case RESOURCE_TYPE_GEM:
-            state->gem_robots++;
-            break;
+    for (uint8_t k = RESOURCE_TYPE_START + 1; k < RESOURCE_TYPE_END; k++) {
+        state->resource[k][STATE_RESOURCE_RESOURCE] -= robot_cost[k];
     }
+
+    state->resource[resource][STATE_RESOURCE_ROBOTS]++;
 }
 
 
@@ -148,7 +139,7 @@ uint8_t states_get_max_gems(list<State> states) {
     uint8_t gems = 0;
 
     for (list<State>::iterator it = states.begin(); it != states.end(); it++) {
-        gems = it->gem > gems ? it->gem : gems;
+        gems = it->resource[RESOURCE_TYPE_GEM][STATE_RESOURCE_RESOURCE] > gems ? it->resource[RESOURCE_TYPE_GEM][STATE_RESOURCE_RESOURCE] : gems;
     }
 
     return gems;
@@ -197,7 +188,7 @@ int main() {
     //     }
     // }
 
-    uint8_t time = 20;
+    uint8_t time = 19;
 
     Blueprint blueprint;
     blueprint.robot_cost[RESOURCE_TYPE_ORE][RESOURCE_TYPE_ORE] = 4;
